@@ -283,7 +283,26 @@ Leídas por `app/shared_kernel/config.py` (pydantic-settings), inyectadas vía `
 | `MYSQL_USER` | `waitlist_app` | |
 | `MYSQL_PASSWORD` | `change-me` | |
 | `CORS_ALLOWED_ORIGINS` | `http://localhost:5173` | orígenes permitidos por CORS, CSV (ej. `http://localhost:5173,https://staging.example.com`) |
+| `SEED_DEMO_DATA` | (sin setear) | en `"true"` solo en `docker-compose.yml` — siembra los 3 locales del piloto al arrancar si no existen. Nunca se setea en un deploy real (ver abajo). |
 | `PORT` | `8000` | puerto de uvicorn (también el que espera Cloud Run) |
+
+### Datos de prueba (seed)
+
+No hay pantalla para crear locales todavía, así que `app/scripts/seed_demo_data.py` siembra automáticamente los 3 locales reales del piloto la primera vez que el backend arranca contra una base vacía — cada uno su propia `Organization` (son 3 clientes independientes, no una cadena):
+
+| Local | Slug | `location_id` (base nueva) |
+|---|---|---|
+| La Terraza Azul (Lima) | `la-terraza-azul` | `1` |
+| Cuatro Vientos (Lima) | `cuatro-vientos` | `2` |
+| Casa Mediterránea (Santiago) | `casa-mediterranea` | `3` |
+
+Es **idempotente**: por cada slug, si ya existe lo saltea — se ve en el log como `already exists, skipping`. Se dispara desde el `Dockerfile` (`alembic upgrade head && [seed si SEED_DEMO_DATA=true] && uvicorn`), nunca desde el código de la app directamente, así que un deploy real (Cloud Run, sin esa variable) nunca siembra datos de prueba en producción.
+
+Si la base ya tenía datos antes de correr el seed, el `location_id` de cada local puede no coincidir con la tabla de arriba — confirmarlo con `curl localhost:8000/locations/la-terraza-azul`. Para volver a sembrar a mano (por ejemplo, tras un `docker compose down -v`):
+
+```bash
+docker compose run --rm backend python -m app.scripts.seed_demo_data
+```
 
 ### Migraciones (Alembic)
 
