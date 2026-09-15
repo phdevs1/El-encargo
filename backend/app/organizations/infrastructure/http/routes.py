@@ -6,15 +6,45 @@ from sqlalchemy.orm import Session
 from app.organizations.application.use_cases.get_location_summary import (
     GetLocationSummaryUseCase,
 )
+from app.organizations.application.use_cases.list_locations import ListLocationsUseCase
 from app.organizations.infrastructure.http.error_handling import handle_domain_errors
-from app.organizations.infrastructure.http.schemas import ErrorResponse, LocationSummaryResponse
+from app.organizations.infrastructure.http.schemas import (
+    ErrorResponse,
+    LocationListItem,
+    LocationListResponse,
+    LocationSummaryResponse,
+)
 from app.shared_kernel.db.session import get_db
 
 
 def build_organizations_router(
     get_location_dep: Callable[..., GetLocationSummaryUseCase],
+    list_locations_dep: Callable[..., ListLocationsUseCase],
 ) -> APIRouter:
     router = APIRouter(tags=["organizations"])
+
+    @router.get(
+        "/locations",
+        response_model=LocationListResponse,
+        summary="List active locations",
+        description=(
+            "All active locations across every organization — e.g. to build a "
+            "location picker, or to look up a `location_id` for the host tablet "
+            "URL without querying the database directly."
+        ),
+    )
+    @handle_domain_errors
+    def list_locations(
+        db: Session = Depends(get_db),
+        uc: ListLocationsUseCase = Depends(list_locations_dep),
+    ) -> LocationListResponse:
+        locations = uc.execute()
+        return LocationListResponse(
+            locations=[
+                LocationListItem(id=loc.id, name=loc.name, slug=loc.slug, country=loc.country)
+                for loc in locations
+            ]
+        )
 
     @router.get(
         "/locations/{slug}",

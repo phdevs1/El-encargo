@@ -18,6 +18,18 @@ class OrmLocationSummaryReader:
         ).scalar_one_or_none()
         if location is None:
             return None
+        return self._to_summary(location)
+
+    def list_active(self) -> list[LocationSummary]:
+        locations = (
+            self._db.execute(select(Location).where(Location.is_active.is_(True)).order_by(Location.name))
+            .scalars()
+            .all()
+        )
+        return [self._to_summary(location) for location in locations]
+
+    @staticmethod
+    def _to_summary(location: Location) -> LocationSummary:
         return LocationSummary(
             id=location.id,
             name=location.name,
