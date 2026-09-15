@@ -4,66 +4,90 @@ Lista de espera digital para restaurantes con mucho *walk-in*: el comensal se un
 
 ## Quickstart
 
-Requisito único: Docker + Docker Compose (`docker compose version`). No hace falta Python ni Node instalados — todo corre en contenedores.
+Requisito: Docker + Docker Compose. Nada más — no hace falta Python ni Node instalados, todo corre en contenedores.
 
 ```bash
 cd restaurant
-cp .env.example .env        # credenciales de MySQL (los defaults ya funcionan)
+cp .env.example .env    # credenciales de MySQL — los defaults ya sirven para desarrollo
 docker compose up --build
 ```
 
-La primera vez tarda un par de minutos (build de imágenes + `npm install`). Al terminar, el backend siembra automáticamente 3 locales de prueba — ver más abajo — y ya se puede abrir:
+Eso es todo. Al terminar (la primera vez tarda un par de minutos: build de imágenes + `npm install`):
 
-| | URL |
+| | |
 |---|---|
-| App del comensal | http://localhost:5173/l/la-terraza-azul |
-| App del anfitrión | http://localhost:5173/host/1 |
-| API (Swagger) | http://localhost:8000/docs |
+| 🍽️ Comensal | http://localhost:5173/l/la-terraza-azul |
+| 🧑‍💼 Anfitrión | http://localhost:5173/host/1 |
+| 🔌 API / Swagger | http://localhost:8000/docs |
 
-## Servicios
+Los 3 locales del piloto ya están sembrados automáticamente — no hace falta ningún paso extra antes de probar (ver [Datos de prueba](#datos-de-prueba)).
+
+## Qué levanta `docker compose up`
 
 | Servicio | Puerto | Qué hace al arrancar |
 |---|---|---|
 | `mysql` | `3306` | espera a pasar el healthcheck antes de que arranque `backend` |
-| `backend` | `8000` | migra la DB (Alembic), siembra datos de prueba si hacen falta, levanta `uvicorn` — ver [`backend/README.md`](backend/README.md) |
+| `backend` | `8000` | corre `alembic upgrade head` → siembra datos de prueba si hacen falta → levanta `uvicorn` |
 | `frontend` | `5173` | `npm install && npm run dev` (servidor de desarrollo de Vite) |
 
 ## Datos de prueba
 
-El backend siembra automáticamente los 3 locales del piloto (La Terraza Azul, Cuatro Vientos, Casa Mediterránea) la primera vez que arranca, y no duplica en arranques siguientes. Detalle del mecanismo (script, idempotencia, cómo re-sembrar a mano) en [`backend/README.md`](backend/README.md#datos-de-prueba-seed).
+No hay pantalla para crear locales todavía, así que el backend siembra automáticamente los 3 locales reales del piloto la primera vez que arranca contra una base vacía:
 
-Si la base ya tenía datos previos, el `location_id` de "La Terraza Azul" puede no ser `1` — confirmarlo con:
+| Local | Slug | `location_id` (base nueva) |
+|---|---|---|
+| La Terraza Azul | `la-terraza-azul` | `1` |
+| Cuatro Vientos | `cuatro-vientos` | `2` |
+| Casa Mediterránea | `casa-mediterranea` | `3` |
+
+Es idempotente (`backend/app/scripts/seed_demo_data.py`): si ya existen, los arranques siguientes los saltan sin duplicar — se ve en el log como `already exists, skipping`. Solo pasa en local, gateado por `SEED_DEMO_DATA=true` en `docker-compose.yml`; un deploy real (Cloud Run) no setea esa variable, así que nunca siembra datos de prueba en producción.
+
+Si la base ya tenía datos antes de este cambio, el `location_id` de cada local puede no coincidir con la tabla de arriba — confirmarlo con:
 
 ```bash
 curl localhost:8000/locations/la-terraza-azul
 ```
 
-## Comandos útiles
+Para volver a sembrar a mano (por ejemplo, tras un `down -v`):
 
 ```bash
-# reconstruir después de cambiar requirements.txt o package.json
-docker compose build backend
-docker compose build frontend
+docker compose run --rm backend python -m app.scripts.seed_demo_data
+```
 
-# logs de un servicio puntual
+## Comandos útiles del día a día
+
+**Reconstruir** después de cambiar dependencias (`requirements.txt` / `package.json`):
+```bash
+docker compose up --build          # reconstruye solo lo que cambió
+docker compose build backend       # solo el backend
+docker compose build frontend      # solo el frontend
+```
+
+**Ver logs** (útil si algo no levantó bien):
+```bash
 docker compose logs backend --tail=50
 docker compose logs frontend --tail=50
+```
 
-# detener
-docker compose down          # elimina contenedores, los datos de MySQL persisten en el volumen
-docker compose down -v       # además borra el volumen — arranca desde cero la próxima vez
-docker compose stop          # solo pausa, para reanudar con `docker compose start`
+**Parar y limpiar:**
+```bash
+docker compose stop          # pausa los contenedores sin eliminarlos — reanudar con `docker compose start`
+docker compose down          # detiene y elimina los contenedores; los datos de MySQL persisten en el volumen
+docker compose down -v       # además borra el volumen de MySQL — la próxima vez arranca desde cero
 ```
 
 ## Variables de entorno
 
-Todas tienen default en `docker-compose.yml` — normalmente no hace falta tocar nada. Las específicas del backend (MySQL, CORS, seed) están documentadas en [`backend/README.md`](backend/README.md).
+Todas están declaradas con sus defaults directamente en `docker-compose.yml`; el `.env` en la raíz solo hace falta si querés cambiar las credenciales de MySQL.
 
-| Variable | Dónde se usa | Default | Notas |
+| Variable | Servicio | Default | Notas |
 |---|---|---|---|
+| `MYSQL_ROOT_PASSWORD` / `MYSQL_DATABASE` / `MYSQL_USER` / `MYSQL_PASSWORD` | `mysql`, `backend` | `change-me` / `waitlist` / `waitlist_app` / `change-me` | mismas credenciales inyectadas a ambos servicios |
+| `CORS_ALLOWED_ORIGINS` | `backend` | `http://localhost:5173` | orígenes permitidos por el middleware CORS del backend |
+| `SEED_DEMO_DATA` | `backend` | (sin setear) | en `"true"` solo en `docker-compose.yml` — nunca en un deploy real |
 | `VITE_API_BASE_URL` | `frontend` | `http://localhost:8000` | debe ser una URL alcanzable **desde el navegador** (el puerto publicado en el host), no el nombre interno `backend:8000` de la red de Docker — el `fetch` corre en el navegador, no dentro del contenedor |
 
-## Estructura
+## Estructura del repo
 
 ```
 restaurant/
@@ -75,4 +99,4 @@ restaurant/
 
 ## Más documentación
 
-- [`backend/README.md`](backend/README.md): arquitectura (monolito modular + hexagonal), modelo ER, endpoints, variables de entorno del backend, Alembic, seed.
+- [`backend/README.md`](backend/README.md): arquitectura del backend (monolito modular + hexagonal), modelo ER completo, endpoints, comandos de Alembic.

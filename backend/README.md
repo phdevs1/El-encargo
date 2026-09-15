@@ -251,7 +251,7 @@ Sin autenticación en los endpoints de la tablet del anfitrión en este piloto �
 
 ## Cómo correr localmente
 
-Ver el [README de la raíz](../README.md) para levantar todo el proyecto (`docker compose up --build`). En cada arranque el contenedor corre, en orden, `alembic upgrade head` → seed de datos de prueba (si aplica, ver abajo) → `uvicorn` (ver `Dockerfile`). Queda disponible en `http://localhost:8000`.
+Ver el [README de la raíz](../README.md) para levantar todo el proyecto (`docker compose up --build`) y sembrar datos de prueba. El backend corre `alembic upgrade head` automáticamente antes de levantar `uvicorn` en cada arranque (ver `Dockerfile`) y queda disponible en `http://localhost:8000`.
 
 ### Variables de entorno (backend)
 
@@ -265,16 +265,7 @@ Leídas por `app/shared_kernel/config.py` (pydantic-settings), inyectadas vía `
 | `MYSQL_USER` | `waitlist_app` | |
 | `MYSQL_PASSWORD` | `change-me` | |
 | `CORS_ALLOWED_ORIGINS` | `http://localhost:5173` | orígenes permitidos por CORS, CSV (ej. `http://localhost:5173,https://staging.example.com`) |
-| `SEED_DEMO_DATA` | (sin setear) | en `"true"` corre `app/scripts/seed_demo_data.py` antes de levantar uvicorn (ver Dockerfile) — solo se setea en `docker-compose.yml`, nunca en un deploy real |
 | `PORT` | `8000` | puerto de uvicorn (también el que espera Cloud Run) |
-
-### Datos de prueba (seed)
-
-`app/scripts/seed_demo_data.py` siembra los 3 locales reales del piloto (La Terraza Azul, Cuatro Vientos, Casa Mediterránea — cada uno su propia `Organization`). Es idempotente: por cada `slug`, si ya existe lo saltea, así que correrlo varias veces nunca duplica datos. Se dispara solo al arrancar el contenedor si `SEED_DEMO_DATA=true`; para correrlo a mano:
-
-```bash
-docker compose run --rm backend python -m app.scripts.seed_demo_data
-```
 
 ### Migraciones (Alembic)
 
