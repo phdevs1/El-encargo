@@ -12,6 +12,7 @@ from app.waitlist.domain.errors import (
     SortOrderPrecisionExhausted,
     WaitlistEntryNotFound,
 )
+from app.waitlist.infrastructure.websocket.connection_manager import broadcaster
 
 
 def handle_domain_errors(fn):
@@ -20,6 +21,11 @@ def handle_domain_errors(fn):
         try:
             result = fn(*args, db=db, **kwargs)
             db.commit()
+            # Only response models for mutating actions carry `location_id`
+            # (see schemas.py) — GET routes naturally skip this.
+            location_id = getattr(result, "location_id", None)
+            if location_id is not None:
+                broadcaster.notify(location_id)
             return result
         except StaleDataError:
             db.rollback()

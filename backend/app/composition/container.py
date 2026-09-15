@@ -1,3 +1,5 @@
+import asyncio
+
 from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
@@ -9,7 +11,7 @@ from app.organizations.composition import build_organizations_public_router
 from app.organizations.infrastructure.orm.location_summary_reader import OrmLocationSummaryReader
 from app.organizations.infrastructure.orm.waitlist_location_reader import OrmLocationReader
 from app.shared_kernel.config import settings
-from app.shared_kernel.db.session import get_db
+from app.shared_kernel.db.session import SessionLocal, get_db
 from app.shared_kernel.infrastructure.clock import SystemClock
 from app.waitlist.application.use_cases.call_waitlist_entry import CallWaitlistEntryUseCase
 from app.waitlist.application.use_cases.cancel_waitlist_entry import CancelWaitlistEntryUseCase
@@ -21,12 +23,19 @@ from app.waitlist.application.use_cases.list_waitlist_queue import ListWaitlistQ
 from app.waitlist.application.use_cases.mark_no_show import MarkNoShowUseCase
 from app.waitlist.application.use_cases.reorder_waitlist_entry import ReorderWaitlistEntryUseCase
 from app.waitlist.application.use_cases.seat_waitlist_entry import SeatWaitlistEntryUseCase
-from app.waitlist.composition import build_waitlist_guest_router, build_waitlist_host_router
+from app.waitlist.composition import (
+    build_waitlist_guest_router,
+    build_waitlist_host_router,
+    build_waitlist_ws_router,
+)
+from app.waitlist.infrastructure.http.response_mappers import to_host_queue_list_response
+from app.waitlist.infrastructure.http.schemas import HostQueueListResponse
 from app.waitlist.infrastructure.notifications.stub_notifier import LoggingTableReadyNotifier
 from app.waitlist.infrastructure.orm.repositories import (
     SqlAlchemyGuestRepository,
     SqlAlchemyWaitlistEntryRepository,
 )
+from app.waitlist.infrastructure.websocket.connection_manager import broadcaster
 
 
 OPENAPI_TAGS = [
@@ -101,6 +110,20 @@ def build_app() -> FastAPI:
     def reorder_dep(db: Session = Depends(get_db)) -> ReorderWaitlistEntryUseCase:
         return ReorderWaitlistEntryUseCase(SqlAlchemyWaitlistEntryRepository(db))
 
+    def fetch_host_queue_snapshot(location_id: int) -> HostQueueListResponse:
+        db = SessionLocal()
+        try:
+            uc = ListWaitlistQueueUseCase(OrmLocationReader(db), SqlAlchemyWaitlistEntryRepository(db))
+            return to_host_queue_list_response(uc.execute(location_id))
+        finally:
+            db.close()
+
+    broadcaster.configure(fetch_host_queue_snapshot)
+
+    @app.on_event("startup")
+    async def _bind_broadcaster_loop() -> None:
+        broadcaster.bind_loop(asyncio.get_running_loop())
+
     app.include_router(build_organizations_public_router(get_location_dep))
     app.include_router(build_waitlist_guest_router(join_dep, status_dep, cancel_dep))
     app.include_router(
@@ -108,6 +131,7 @@ def build_app() -> FastAPI:
             list_dep, call_dep, seat_dep, cancel_dep, no_show_dep, reorder_dep
         )
     )
+    app.include_router(build_waitlist_ws_router())
 
     @app.get("/health", tags=["ops"], summary="Liveness check")
     def health() -> dict[str, str]:

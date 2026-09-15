@@ -40,7 +40,7 @@ No hay pantalla para crear locales todavía, así que el backend siembra automá
 | Cuatro Vientos (Lima) | http://localhost:5173/l/cuatro-vientos | http://localhost:5173/host/2 |
 | Casa Mediterránea (Santiago) | http://localhost:5173/l/casa-mediterranea | http://localhost:5173/host/3 |
 
-Para probar de punta a punta: abrí la URL de comensal de un local en una pestaña, unite a la cola, y en otra pestaña abrí la URL de anfitrión de ese mismo local — la entrada aparece sola (polling cada 4s, sin recargar). Probalo con los 3 en paralelo para confirmar que las colas no se mezclan entre locales.
+Para probar de punta a punta: abrí la URL de comensal de un local en una pestaña, unite a la cola, y en otra pestaña abrí la URL de anfitrión de ese mismo local — la entrada aparece **al instante**, sin recargar (la tablet del anfitrión se actualiza en tiempo real por WebSocket, no por polling — ver [`backend/README.md`](backend/README.md#tiempo-real-websocket)). El puntito junto a "Cola · local N" indica si está conectada (verde) o reconectando (ámbar). Probalo con los 3 en paralelo para confirmar que las colas no se mezclan entre locales.
 
 Es idempotente (`backend/app/scripts/seed_demo_data.py`): si ya existen, los arranques siguientes los saltan sin duplicar — se ve en el log como `already exists, skipping`. Solo pasa en local, gateado por `SEED_DEMO_DATA=true` en `docker-compose.yml`; un deploy real (Cloud Run) no setea esa variable, así que nunca siembra datos de prueba en producción.
 

@@ -14,10 +14,12 @@ from app.waitlist.application.use_cases.reorder_waitlist_entry import (
 )
 from app.waitlist.application.use_cases.seat_waitlist_entry import SeatWaitlistEntryUseCase
 from app.waitlist.infrastructure.http.error_handling import handle_domain_errors
-from app.waitlist.infrastructure.http.response_mappers import to_action_response
+from app.waitlist.infrastructure.http.response_mappers import (
+    to_action_response,
+    to_host_queue_list_response,
+)
 from app.waitlist.infrastructure.http.schemas import (
     ErrorResponse,
-    HostQueueEntryResponse,
     HostQueueListResponse,
     ReorderRequest,
     WaitlistEntryActionResponse,
@@ -68,25 +70,7 @@ def build_host_router(
         uc: ListWaitlistQueueUseCase = Depends(list_dep),
     ) -> HostQueueListResponse:
         views = uc.execute(location_id)
-        return HostQueueListResponse(
-            entries=[
-                HostQueueEntryResponse(
-                    id=v.entry.id,
-                    public_token=v.entry.public_token,
-                    guest_name=v.entry.guest_name_snapshot,
-                    phone_e164=v.entry.phone_snapshot,
-                    party_size=v.entry.party_size,
-                    status=v.entry.status,
-                    position=v.position,
-                    is_frequent_guest=v.is_frequent_guest,
-                    joined_at=v.entry.joined_at,
-                    called_at=v.entry.called_at,
-                    estimated_wait_minutes_at_join=v.entry.estimated_wait_minutes_at_join,
-                    version=v.entry.version,
-                )
-                for v in views
-            ]
-        )
+        return to_host_queue_list_response(views)
 
     @router.post(
         "/waitlist-entries/{entry_id:int}/call",

@@ -1,10 +1,8 @@
 import { useEffect, useMemo } from "react";
 import { useParams } from "react-router-dom";
 import { QueueList } from "../components/QueueList";
-import { usePolling } from "../hooks/usePolling";
+import { useQueueSocket } from "../hooks/useQueueSocket";
 import { useHostQueueStore } from "../stores/useHostQueueStore";
-
-const POLL_INTERVAL_MS = 4_000;
 
 export function HostQueuePage() {
   const { locationId } = useParams<{ locationId: string }>();
@@ -14,15 +12,18 @@ export function HostQueuePage() {
   const loading = useHostQueueStore((s) => s.loading);
   const error = useHostQueueStore((s) => s.error);
   const fetchQueue = useHostQueueStore((s) => s.fetchQueue);
+  const setEntries = useHostQueueStore((s) => s.setEntries);
   const call = useHostQueueStore((s) => s.call);
   const seat = useHostQueueStore((s) => s.seat);
   const reorder = useHostQueueStore((s) => s.reorder);
 
+  // Fast first paint via REST; live updates (from this tablet, the other
+  // one, or a guest joining) arrive over the WebSocket from here on.
   useEffect(() => {
     if (!Number.isNaN(id)) fetchQueue(id);
   }, [id, fetchQueue]);
 
-  usePolling(() => fetchQueue(id), Number.isNaN(id) ? null : POLL_INTERVAL_MS);
+  const socketStatus = useQueueSocket(id, (message) => setEntries(message.entries));
 
   const stats = useMemo(() => {
     const waiting = entries.filter((e) => e.status === "waiting");
@@ -43,7 +44,13 @@ export function HostQueuePage() {
   return (
     <div className="mx-auto flex min-h-screen max-w-2xl flex-col gap-4 px-6 py-8">
       <header className="flex items-center justify-between">
-        <h1 className="text-lg font-semibold text-text">Cola · local {id}</h1>
+        <div className="flex items-center gap-2">
+          <h1 className="text-lg font-semibold text-text">Cola · local {id}</h1>
+          <span
+            title={socketStatus === "open" ? "En vivo" : "Reconectando…"}
+            className={`h-2 w-2 rounded-full ${socketStatus === "open" ? "bg-emerald-400" : "bg-amber-400"}`}
+          />
+        </div>
         <p className="text-sm text-text-muted">
           {stats.waitingCount} en cola{stats.avgWait !== null && ` · espera media ${stats.avgWait} min`}
         </p>

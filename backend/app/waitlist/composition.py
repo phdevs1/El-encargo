@@ -14,6 +14,7 @@ from app.waitlist.application.use_cases.reorder_waitlist_entry import ReorderWai
 from app.waitlist.application.use_cases.seat_waitlist_entry import SeatWaitlistEntryUseCase
 from app.waitlist.infrastructure.http.guest_routes import build_guest_router
 from app.waitlist.infrastructure.http.host_routes import build_host_router
+from app.waitlist.infrastructure.websocket.routes import router as _ws_router
 
 
 def build_waitlist_guest_router(
@@ -33,3 +34,7 @@ def build_waitlist_host_router(
     reorder_dep: Callable[..., ReorderWaitlistEntryUseCase],
 ) -> APIRouter:
     return build_host_router(list_dep, call_dep, seat_dep, cancel_dep, no_show_dep, reorder_dep)
+
+
+def build_waitlist_ws_router() -> APIRouter:
+    return _ws_router

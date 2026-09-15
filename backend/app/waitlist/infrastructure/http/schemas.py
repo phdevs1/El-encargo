@@ -52,6 +52,9 @@ class JoinWaitlistResponse(BaseModel):
     position: int = Field(description="1-based position in the waiting queue right now.")
     estimated_wait_minutes: int = Field(description="Estimated wait in minutes, at the moment of joining.")
     status: WaitlistStatus
+    location_id: int = Field(
+        description="Internal id of the location this ticket belongs to (used internally to broadcast live queue updates)."
+    )
 
 
 class WaitlistEntryStatusResponse(BaseModel):
@@ -132,4 +135,7 @@ class WaitlistEntryActionResponse(BaseModel):
     no_show_at: datetime | None = None
     sort_order: str | None = Field(
         default=None, description="Entry's current ordering key, as a decimal string (only meaningful after a reorder)."
+    )
+    location_id: int = Field(
+        description="Internal id of the location this entry belongs to (used internally to broadcast live queue updates)."
     )

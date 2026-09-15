@@ -66,6 +66,7 @@ def build_guest_router(
             position=result.position,
             estimated_wait_minutes=result.estimated_wait_minutes,
             status=result.entry.status,
+            location_id=result.entry.location_id,
         )
 
     @router.get(

@@ -17,6 +17,7 @@ export interface JoinWaitlistResponse {
   position: number;
   estimated_wait_minutes: number;
   status: WaitlistStatus;
+  location_id: number;
 }
 
 export interface WaitlistEntryStatusResponse {
@@ -60,4 +61,8 @@ export interface WaitlistEntryActionResponse {
   cancelled_at: string | null;
   no_show_at: string | null;
   sort_order: string | null;
+  location_id: number;
 }
+
+/** Message pushed over the host queue WebSocket — same shape as the REST list response. */
+export type QueueUpdateMessage = HostQueueListResponse;

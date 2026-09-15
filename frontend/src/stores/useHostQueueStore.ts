@@ -12,6 +12,7 @@ interface HostQueueState {
 
 interface HostQueueActions {
   fetchQueue: (locationId: number) => Promise<void>;
+  setEntries: (entries: HostQueueEntryResponse[]) => void;
   call: (entryId: number) => Promise<void>;
   seat: (entryId: number) => Promise<void>;
   markNoShow: (entryId: number) => Promise<void>;
@@ -33,6 +34,9 @@ export const useHostQueueStore = create<HostQueueState & HostQueueActions>((set,
       set({ loading: false, error: err instanceof ApiError ? err.detail : "No se pudo cargar la cola" });
     }
   },
+
+  /** Used by the WebSocket hook — a push from the server is already the source of truth. */
+  setEntries: (entries) => set({ entries, loading: false, error: null }),
 
   call: async (entryId) => {
     try {

@@ -249,6 +249,24 @@ Documentados completos (summary, descripción, ejemplos, respuestas de error) en
 
 Sin autenticación en los endpoints de la tablet del anfitrión en este piloto — riesgo aceptado y documentado, no auth todavía.
 
+## Tiempo real (WebSocket)
+
+La tablet del anfitrión (pantalla 4) no usa polling — se actualiza por WebSocket:
+
+```
+GET /ws/locations/{location_id}/waitlist-entries   (upgrade a WebSocket)
+```
+
+Al conectar manda el snapshot actual de la cola (mismo shape que `HostQueueListResponse`); después, cada vez que una mutación (unirse, llamar, sentar, cancelar, no-show, reordenar) afecta a ese local, todos los clientes conectados a ese `location_id` reciben el snapshot actualizado — sin importar qué cliente hizo el cambio (otra tablet, un comensal uniéndose, etc). Sin autenticación, igual que el resto de rutas de host.
+
+**Cómo está armado** (`app/waitlist/infrastructure/websocket/`):
+- `connection_manager.py`: `QueueBroadcaster`, un singleton en memoria (mismo patrón que `settings`) con un registro `location_id → conexiones`. `notify(location_id)` es **sync** — pensado para llamarse desde el código sync de las rutas HTTP (que corren en threadpool) — y usa `asyncio.run_coroutine_threadsafe` contra el event loop capturado al arrancar (`bind_loop`, en un hook `@app.on_event("startup")` de `container.py`).
+- El broadcast se dispara **después** del `db.commit()`, no dentro del use case: `error_handling.py` (el decorador compartido por `guest_routes.py`/`host_routes.py`) revisa `getattr(result, "location_id", None)` justo después de comitear y notifica si existe. Por eso `WaitlistEntryActionResponse` y `JoinWaitlistResponse` llevan `location_id` — es lo único que hizo falta tocar en los schemas; ningún use case cambió. Disparar el broadcast *antes* del commit sería una carrera real: el fetch del snapshot abre su propia sesión y podría correr antes de que la transacción original esté visible para otras conexiones.
+
+**Límite conocido, aceptado para el piloto**: el broadcaster vive en memoria de un solo proceso. Si esto corre en más de una instancia de Cloud Run, un cambio manejado por la instancia A no le llega a un cliente conectado a la instancia B — haría falta un pub/sub compartido (Redis, etc.) para escalar más allá de un proceso. A 3 locales / ≤40 personas no aplica todavía.
+
+La pantalla del comensal (2) se queda en polling de 12s a propósito — no en WebSocket — por el wifi malo/costo de datos móviles en la puerta.
+
 ## Cómo correr localmente
 
 Ver el [README de la raíz](../README.md) para levantar todo el proyecto (`docker compose up --build`) y sembrar datos de prueba. El backend corre `alembic upgrade head` automáticamente antes de levantar `uvicorn` en cada arranque (ver `Dockerfile`) y queda disponible en `http://localhost:8000`.
