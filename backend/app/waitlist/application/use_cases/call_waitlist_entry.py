@@ -1,0 +1,31 @@
+from app.shared_kernel.domain.enums import WaitlistStatus
+from app.shared_kernel.ports.clock import ClockPort
+from app.waitlist.application.ports.outbound import TableReadyNotifierPort, WaitlistEntryRepositoryPort
+from app.waitlist.domain.errors import WaitlistEntryNotFound
+from app.waitlist.domain.state_machine import assert_transition_allowed
+from app.waitlist.infrastructure.orm.models import WaitlistEntry
+
+
+class CallWaitlistEntryUseCase:
+    def __init__(
+        self,
+        entries: WaitlistEntryRepositoryPort,
+        clock: ClockPort,
+        notifier: TableReadyNotifierPort,
+    ):
+        self._entries = entries
+        self._clock = clock
+        self._notifier = notifier
+
+    def execute(self, entry_id: int) -> WaitlistEntry:
+        entry = self._entries.get_by_id(entry_id)
+        if entry is None:
+            raise WaitlistEntryNotFound(entry_id)
+
+        assert_transition_allowed(entry.status, WaitlistStatus.CALLED)
+        entry.status = WaitlistStatus.CALLED
+        entry.called_at = self._clock.now()
+        self._entries.save(entry)
+
+        self._notifier.notify_table_ready(entry)
+        return entry
