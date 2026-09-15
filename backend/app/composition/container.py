@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from app.organizations.application.use_cases.get_location_summary import (
     GetLocationSummaryUseCase,
 )
+from app.organizations.application.use_cases.list_locations import ListLocationsUseCase
 from app.organizations.composition import build_organizations_public_router
 from app.organizations.infrastructure.orm.location_summary_reader import OrmLocationSummaryReader
 from app.organizations.infrastructure.orm.waitlist_location_reader import OrmLocationReader
@@ -79,6 +80,9 @@ def build_app() -> FastAPI:
     def get_location_dep(db: Session = Depends(get_db)) -> GetLocationSummaryUseCase:
         return GetLocationSummaryUseCase(OrmLocationSummaryReader(db))
 
+    def list_locations_dep(db: Session = Depends(get_db)) -> ListLocationsUseCase:
+        return ListLocationsUseCase(OrmLocationSummaryReader(db))
+
     def join_dep(db: Session = Depends(get_db)) -> JoinWaitlistUseCase:
         return JoinWaitlistUseCase(
             OrmLocationReader(db),
@@ -124,7 +128,7 @@ def build_app() -> FastAPI:
     async def _bind_broadcaster_loop() -> None:
         broadcaster.bind_loop(asyncio.get_running_loop())
 
-    app.include_router(build_organizations_public_router(get_location_dep))
+    app.include_router(build_organizations_public_router(get_location_dep, list_locations_dep))
     app.include_router(build_waitlist_guest_router(join_dep, status_dep, cancel_dep))
     app.include_router(
         build_waitlist_host_router(
