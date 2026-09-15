@@ -1,5 +1,5 @@
-import { useEffect } from "react";
-import { useParams } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { useNavigate, useParams } from "react-router-dom";
 import { ProgressBar } from "../components/ProgressBar";
 import { usePolling } from "../hooks/usePolling";
 import { useGuestWaitlistStore } from "../stores/useGuestWaitlistStore";
@@ -8,6 +8,7 @@ const POLL_INTERVAL_MS = 12_000;
 
 export function StatusPage() {
   const { slug = "", token = "" } = useParams<{ slug: string; token: string }>();
+  const navigate = useNavigate();
 
   const publicToken = useGuestWaitlistStore((s) => s.publicToken);
   const status = useGuestWaitlistStore((s) => s.status);
@@ -22,20 +23,30 @@ export function StatusPage() {
 
   // The URL is the source of truth: if the store doesn't already hold this
   // exact token (fresh tab, cleared storage, a shared link), fetch it.
+  const [hydrating, setHydrating] = useState(publicToken !== token);
+
   useEffect(() => {
     if (publicToken !== token) {
-      hydrateFromToken(slug, token).catch(() => {});
+      setHydrating(true);
+      hydrateFromToken(slug, token)
+        .catch(() => {})
+        .finally(() => setHydrating(false));
     }
   }, [slug, token, publicToken, hydrateFromToken]);
 
   usePolling(refreshStatus, status === "waiting" ? POLL_INTERVAL_MS : null);
 
-  if (loading && publicToken !== token) {
-    return <Centered>Cargando…</Centered>;
-  }
+  // No ticket and we're done hydrating: it doesn't exist — either it never
+  // did, or a 404 during polling/hydration wiped the stale local copy.
+  // The join form is the only sensible place to land, not a dead-end screen.
+  useEffect(() => {
+    if (!hydrating && !publicToken) {
+      navigate(`/l/${slug}`, { replace: true });
+    }
+  }, [hydrating, publicToken, slug, navigate]);
 
-  if (error && publicToken !== token) {
-    return <Centered>Ticket no encontrado</Centered>;
+  if (hydrating || !publicToken) {
+    return <Centered>Cargando…</Centered>;
   }
 
   if (status === "cancelled") {

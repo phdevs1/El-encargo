@@ -22,12 +22,39 @@ export function JoinPage() {
   const loading = useGuestWaitlistStore((s) => s.loading);
   const error = useGuestWaitlistStore((s) => s.error);
 
-  // Re-entry: if this browser already has an active ticket for this slug, skip the form.
+  // Re-entry: if this browser has a locally-persisted ticket for this slug,
+  // verify it still exists server-side before skipping the form — a stale
+  // ticket (DB reset, expired, etc.) must fall back to the join form
+  // instead of freezing on a dead status screen forever.
+  const [checkingResume, setCheckingResume] = useState(() => {
+    const s = useGuestWaitlistStore.getState();
+    return s.slug === slug && !!s.publicToken && (s.status === "waiting" || s.status === "called");
+  });
+
   useEffect(() => {
     const s = useGuestWaitlistStore.getState();
-    if (s.slug === slug && s.publicToken && (s.status === "waiting" || s.status === "called")) {
-      navigate(`/l/${slug}/status/${s.publicToken}`, { replace: true });
+    if (!(s.slug === slug && s.publicToken && (s.status === "waiting" || s.status === "called"))) {
+      return;
     }
+    let cancelled = false;
+    useGuestWaitlistStore
+      .getState()
+      .hydrateFromToken(slug, s.publicToken)
+      .then(() => {
+        if (cancelled) return;
+        const fresh = useGuestWaitlistStore.getState();
+        if (fresh.status === "waiting" || fresh.status === "called") {
+          navigate(`/l/${slug}/status/${fresh.publicToken}`, { replace: true });
+        } else {
+          setCheckingResume(false);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setCheckingResume(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [slug, navigate]);
 
   useEffect(() => {
@@ -61,7 +88,7 @@ export function JoinPage() {
     }
   }
 
-  if (loadingLocation) {
+  if (loadingLocation || checkingResume) {
     return <Centered>Cargando…</Centered>;
   }
 

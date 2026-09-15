@@ -82,7 +82,15 @@ export const useGuestWaitlistStore = create<GuestWaitlistState & GuestWaitlistAc
             loading: false,
           });
         } catch (err) {
-          set({ loading: false, error: err instanceof ApiError ? err.detail : "Ticket no encontrado" });
+          // A 404 means this ticket no longer exists server-side (expired,
+          // DB reset, etc). Wipe it instead of leaving stale frozen data
+          // around — otherwise a future visit would keep "resuming" a ticket
+          // that's gone, never showing the join form again.
+          if (err instanceof ApiError && err.status === 404) {
+            set({ ...initialState });
+          } else {
+            set({ loading: false, error: err instanceof ApiError ? err.detail : "Ticket no encontrado" });
+          }
           throw err;
         }
       },
@@ -99,7 +107,11 @@ export const useGuestWaitlistStore = create<GuestWaitlistState & GuestWaitlistAc
             error: null,
           });
         } catch (err) {
-          set({ error: err instanceof ApiError ? err.detail : "No se pudo actualizar el estado" });
+          if (err instanceof ApiError && err.status === 404) {
+            set({ ...initialState });
+          } else {
+            set({ error: err instanceof ApiError ? err.detail : "No se pudo actualizar el estado" });
+          }
         }
       },
 
